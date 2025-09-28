@@ -1,4 +1,3 @@
-// app/api/scan/route.js
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { generateObject } from "ai";
@@ -41,26 +40,26 @@ function pickOffImage(p) {
 }
 
 async function getOffProduct(barcode) {
-  const r = await fetch(`${OFF_BASE}/product/${barcode}.json`, {
-    cache: "no-store",
-  });
-  if (!r.ok) throw new Error("OFF request failed");
-  const data = await r.json();
-  if (data.status !== 1 || !data.product) return null;
+  try {
+    const r = await fetch(`${OFF_BASE}/product/${barcode}.json`, {
+      cache: "no-store",
+    });
+    if (!r.ok) return null;
+    const data = await r.json();
+    if (data.status !== 1 || !data.product) return null;
 
-  const p = data.product;
-  const name =
-    p.product_name ||
-    p.generic_name ||
-    p.brands ||
-    p._id ||
-    `Produk ${barcode}`;
-  return {
-    name,
-    barcode,
-    image: pickOffImage(p),
-    raw: p,
-  };
+    const p = data.product;
+    const name =
+      p.product_name ||
+      p.generic_name ||
+      p.brands ||
+      p._id ||
+      `Produk ${barcode}`;
+
+    return { name, barcode, image: pickOffImage(p), raw: p };
+  } catch {
+    return null;
+  }
 }
 
 function extractPackagingSignals(pRaw) {
@@ -80,6 +79,7 @@ function extractPackagingSignals(pRaw) {
         .join(" ")
     );
   }
+
   const text = buckets.filter(Boolean).join(" ").toLowerCase();
   const hasAny = (arr) => arr.some((k) => text.includes(k));
 
@@ -139,85 +139,179 @@ function enforceConsistency(ai, signals) {
     /daur ulang|recycle|did[ia]ur ulang|pilah.*(kaca|plastik|kertas|karton|logam)/i.test(
       ai.awareness || ""
     );
-  if (saysRecycle && !ai.recyclable) {
-    ai.recyclable = true;
-  }
+  if (saysRecycle && !ai.recyclable) ai.recyclable = true;
 
   return ai;
 }
 
-async function ensureResource(path) {
-  const r = await fetch(`${MOCK}/${path}`, { method: "HEAD" });
-  if (r.status === 404) {
-    throw new Error(
-      `Resource "${path}" tidak ditemukan di MockAPI. Buat resource itu dulu.`
+function normalizeTips(tips) {
+  return (Array.isArray(tips) ? tips : tips ? [String(tips)] : [])
+    .map((s) => String(s).trim())
+    .filter(Boolean)
+    .map((s) => (s.length > 90 ? s.slice(0, 87) + "…" : s));
+}
+
+async function fetchProductsByBarcode(barcode) {
+  const byFieldURL = `${MOCK}/products?barcode=${encodeURIComponent(barcode)}`;
+  let res = await fetch(byFieldURL, {
+    cache: "no-store",
+    headers: { Accept: "application/json" },
+  });
+
+  if (res.status === 404) {
+    const resAll = await fetch(`${MOCK}/products`, {
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+    });
+    if (resAll.status === 404) {
+      throw new Error(
+        `Resource "products" tidak ditemukan di MockAPI. Pastikan MOCK_API_BASE benar (pakai /api/v1) & resource sudah dibuat.`
+      );
+    }
+    if (!resAll.ok) {
+      const t = await resAll.text().catch(() => "");
+      throw new Error(
+        `Gagal membaca products di MockAPI (${resAll.status}). Detail: ${
+          t || "(no body)"
+        }`
+      );
+    }
+    const all = await resAll.json();
+    return (Array.isArray(all) ? all : []).filter(
+      (p) => String(p.barcode) === String(barcode)
     );
   }
+
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    throw new Error(
+      `Gagal cek products di MockAPI (${res.status}). Detail: ${
+        t || "(no body)"
+      }`
+    );
+  }
+
+  const data = await res.json();
+  return Array.isArray(data) ? data : data ? [data] : [];
 }
 
 async function upsertProduct({ name, barcode, image }) {
-  await ensureResource("products");
-  const q = await fetch(
-    `${MOCK}/products?barcode=${encodeURIComponent(barcode)}`
-  );
-  if (!q.ok) throw new Error("Gagal cek products di MockAPI");
-  const list = await q.json();
+  const list = await fetchProductsByBarcode(barcode);
+  const base = {
+    name,
+    barcode,
+    image: image || "",
+    imageUrl: image || "",
+  };
 
   if (Array.isArray(list) && list.length) {
     const existing = list[0];
-    await fetch(`${MOCK}/products/${existing.id}`, {
+    const upd = await fetch(`${MOCK}/products/${existing.id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: name || existing.name,
-        barcode: existing.barcode || barcode,
-        image: image || existing.image || "",
-      }),
+      body: JSON.stringify({ ...existing, ...base }),
     });
-    return { ...existing, name, barcode, image, id: existing.id };
+    if (!upd.ok) {
+      const t = await upd.text().catch(() => "");
+      throw new Error(
+        `Gagal update product di MockAPI (${upd.status}). Detail: ${
+          t || "(no body)"
+        }`
+      );
+    }
+    return await upd.json();
   } else {
-    const createdRes = await fetch(`${MOCK}/products`, {
+    const crt = await fetch(`${MOCK}/products`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, barcode, image }),
+      body: JSON.stringify(base),
     });
-    if (!createdRes.ok) throw new Error("Gagal membuat product di MockAPI");
-    return createdRes.json();
+    if (!crt.ok) {
+      const t = await crt.text().catch(() => "");
+      throw new Error(
+        `Gagal membuat product di MockAPI (${crt.status}). Detail: ${
+          t || "(no body)"
+        }`
+      );
+    }
+    return await crt.json();
   }
 }
 
 async function fetchLatestEnrichmentByBarcode(barcode) {
-  await ensureResource("enrichments");
-  const r = await fetch(
-    `${MOCK}/enrichments?barcode=${encodeURIComponent(
-      barcode
-    )}&sortBy=createdAt&order=desc`
-  );
-  if (!r.ok) throw new Error("Gagal membaca enrichment di MockAPI");
-  const arr = await r.json();
+  const url = `${MOCK}/enrichments?barcode=${encodeURIComponent(
+    barcode
+  )}&sortBy=createdAt&order=desc`;
+  let res = await fetch(url, {
+    cache: "no-store",
+    headers: { Accept: "application/json" },
+  });
+
+  if (res.status === 404) {
+    const resAll = await fetch(`${MOCK}/enrichments`, {
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+    });
+    if (resAll.status === 404) return null;
+    if (!resAll.ok) {
+      const t = await resAll.text().catch(() => "");
+      throw new Error(
+        `Gagal membaca enrichments di MockAPI (${resAll.status}). Detail: ${
+          t || "(no body)"
+        }`
+      );
+    }
+    const all = (await resAll.json()) || [];
+    const filtered = all.filter((e) => String(e.barcode) === String(barcode));
+    filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    return filtered[0] || null;
+  }
+
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    throw new Error(
+      `Gagal membaca enrichment di MockAPI (${res.status}). Detail: ${
+        t || "(no body)"
+      }`
+    );
+  }
+
+  const arr = await res.json();
   return Array.isArray(arr) && arr.length ? arr[0] : null;
 }
 
 async function saveEnrichment(e) {
-  await ensureResource("enrichments");
   const res = await fetch(`${MOCK}/enrichments`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(e),
   });
-  if (!res.ok) throw new Error("Gagal membuat enrichment di MockAPI");
-  return res.json();
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    throw new Error(
+      `Gagal membuat enrichment di MockAPI (${res.status}). Detail: ${
+        t || "(no body)"
+      }`
+    );
+  }
+  return await res.json();
 }
 
 async function saveScan(s) {
-  await ensureResource("scans");
   const res = await fetch(`${MOCK}/scans`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(s),
   });
-  if (!res.ok) throw new Error("Gagal membuat scan di MockAPI");
-  return res.json();
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    throw new Error(
+      `Gagal membuat scan di MockAPI (${res.status}). Detail: ${
+        t || "(no body)"
+      }`
+    );
+  }
+  return await res.json();
 }
 
 export async function POST(req) {
@@ -231,6 +325,7 @@ export async function POST(req) {
 
     const url = new URL(req.url);
     const force = url.searchParams.get("force") === "1";
+    const requireOff = url.searchParams.get("requireOff") === "1";
 
     const { barcode } = await req.json();
     if (!barcode || typeof barcode !== "string") {
@@ -241,6 +336,18 @@ export async function POST(req) {
     }
 
     const off = await getOffProduct(barcode);
+    if (requireOff && !off) {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "OFF_NOT_FOUND",
+          message:
+            "Produk tidak ditemukan di Open Food Facts. Coba barcode lain atau input manual.",
+        },
+        { status: 404 }
+      );
+    }
+
     const productBase = off || {
       name: `Produk ${barcode}`,
       barcode,
@@ -261,11 +368,7 @@ export async function POST(req) {
           category: latest.category || "lainnya",
           recyclable: !!latest.recyclable,
           awareness: latest.awareness || "",
-          tips: Array.isArray(latest.tips)
-            ? latest.tips
-            : latest.tips
-            ? [String(latest.tips)]
-            : [],
+          tips: normalizeTips(latest.tips),
         };
       }
     }
@@ -283,37 +386,31 @@ export async function POST(req) {
         model: openai("gpt-4o-mini"),
         schema: AiSchema,
         prompt: `
-Anda asisten daur ulang untuk keluarga di Indonesia.
+Anda konsultan daur ulang untuk **ibu rumah tangga di Indonesia**.
+
 Produk: "${productBase.name}" (barcode: ${barcode})
 Kemasan terdeteksi dari OFF: ${sigOn}
 
 TUGAS:
-1) Tentukan "category" (plastik|kertas|karton|kaca|logam|organik|elektronik|tekstil|lainnya).
+1) "category": salah satu dari (plastik|kertas|karton|kaca|logam|organik|elektronik|tekstil|lainnya).
 2) "recyclable": true/false (realistis di fasilitas umum Indonesia).
-3) "awareness": 1–2 kalimat, konsisten dengan kategori (jangan sebut plastik jika kategori kaca, dst).
-4) "tips": 5 butir, super praktis untuk rumah tangga, pakai alat sederhana (air hangat + sabun, gunting/cutter, toples/wadah bekas, lap kain).
-   - Maks 90 karakter per butir.
-   - Hindari tips generik; sebut langkah & alat. Contoh: "rendam tutup di air hangat 5 mnt, lalu kupas label".
-   - Sesuaikan kategori:
-     • Kaca: lepas tutup plastik/metal, keringkan terbalik, bungkus pecahan.
-     • Plastik: cek kode resin, bilas sabun, jemur 15 mnt, pipihkan botol.
-     • Karton/Kertas: pastikan kering, pipihkan, pisah lapisan aluminium (UHT).
-     • Logam: cek magnet, bilas minyak, keringkan.
+3) "awareness": 1–2 kalimat, **konsisten** dengan kategori.
+4) "tips": 5 butir, **super praktis untuk rumah tangga**, ≤80 karakter/point:
+   - Alat rumahan: baskom, sabun cuci piring, air hangat, lap, gunting/tali rafia, rak jemur.
+   - Format langkah nyatakan tindakan + lokasi (dapur/kamar mandi/teras).
+   - Hindari tips generik.
+   - Sesuaikan kategori (kaca/plastik/kertas-karton/logam).
 KONSISTENSI:
 - Jika "awareness" menganjurkan daur ulang, set "recyclable"=true.
-Hanya balas JSON sesuai schema.
-        `,
+
+Balas **HANYA JSON** sesuai schema.`,
       });
 
       ai = {
         category: aiRaw.category || "lainnya",
         recyclable: !!aiRaw.recyclable,
         awareness: aiRaw.awareness || "",
-        tips: Array.isArray(aiRaw.tips)
-          ? aiRaw.tips
-          : aiRaw.tips
-          ? [String(aiRaw.tips)]
-          : [],
+        tips: normalizeTips(aiRaw.tips),
       };
 
       ai = enforceConsistency(ai, signals);
@@ -338,11 +435,14 @@ Hanya balas JSON sesuai schema.
         id: savedProduct.id,
         name: savedProduct.name,
         barcode: savedProduct.barcode,
-        image: savedProduct.image || productBase.image || "",
+        image:
+          savedProduct.image ||
+          savedProduct.imageUrl ||
+          productBase.image ||
+          "",
       },
       ai,
       scan,
-      debug: { signals },
     });
   } catch (e) {
     return NextResponse.json(
