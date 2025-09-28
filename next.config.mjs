@@ -1,4 +1,20 @@
 /** @type {import('next').NextConfig} */
-const nextConfig = {};
+const nextConfig = {
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "images.openfoodfacts.org",
+        pathname: "/images/**",
+      },
+      // kalau mau ijinkan http juga (jarang perlu)
+      {
+        protocol: "http",
+        hostname: "images.openfoodfacts.org",
+        pathname: "/images/**",
+      },
+    ],
+  },
+};
 
 export default nextConfig;
