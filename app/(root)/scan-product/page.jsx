@@ -14,8 +14,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-
-import useScanFlow from "@/hooks/useScanFlow";
+import { useScanController } from "@/hooks/useScanController";
 
 const BRAND = "#9334eb";
 const CameraScanner = dynamic(() => import("@/components/scan/CameraScanner"), {
@@ -23,7 +22,30 @@ const CameraScanner = dynamic(() => import("@/components/scan/CameraScanner"), {
 });
 
 export default function ScanProductPage() {
-  const f = useScanFlow();
+  const {
+    barcode,
+    loading,
+    errorMsg,
+    result,
+    open,
+    offModalOpen,
+    pendingBarcode,
+    manualName,
+    submittingName,
+
+    setBarcode,
+    setOpen,
+    setOffModalOpen,
+    setManualName,
+
+    onDetected,
+    callScanWithName,
+    handleScanButton,
+    handleCheckManual,
+
+    paused,
+    inflightRef,
+  } = useScanController();
 
   return (
     <>
@@ -50,19 +72,22 @@ export default function ScanProductPage() {
               <CameraScanner
                 className="w-full max-h-[420px] md:max-h-[480px] aspect-[3/4] bg-black"
                 facingMode="environment"
-                paused={f.paused}
-                throttleMs={2500}
-                onDetected={f.onDetected}
-                onError={f.onCameraError}
+                paused={paused}
+                cooldownMs={2500}
+                dedupeWindowMs={30000}
+                onDetected={onDetected}
+                onError={(err) =>
+                  console.error(err?.message || "Kamera tidak tersedia.")
+                }
               />
             </div>
 
             <Button
-              onClick={f.submitManualBarcode}
-              disabled={f.loading || !f.barcode || f.inflight}
+              onClick={handleScanButton}
+              disabled={loading || !barcode || inflightRef.current}
               className="mt-6 h-14 w-full rounded-[22px] bg-gradient-to-r from-[#9334eb] to-[#6b21a8] text-white text-base font-semibold shadow-md hover:brightness-95 disabled:opacity-60"
             >
-              {f.loading ? (
+              {loading ? (
                 <span className="inline-flex items-center gap-2">
                   <Loader2 className="h-5 w-5 animate-spin" /> Memproses...
                 </span>
@@ -76,15 +101,17 @@ export default function ScanProductPage() {
             <div className="mt-4 flex w-full items-center gap-3">
               <Input
                 placeholder="Masukkan kode barcode"
-                value={f.barcode}
-                onChange={(e) => f.setBarcode(e.target.value)}
+                value={barcode}
+                onChange={(e) =>
+                  setBarcode((e.target.value || "").replace(/\D/g, ""))
+                }
                 className="h-12 rounded-2xl focus-visible:ring-2 focus-visible:ring-[#9334eb]"
                 inputMode="numeric"
               />
               <Button
                 variant="outline"
-                onClick={f.submitManualBarcode}
-                disabled={f.loading || !f.barcode || f.inflight}
+                onClick={handleCheckManual}
+                disabled={loading || !barcode || inflightRef.current}
                 className="h-12 rounded-2xl px-5 font-semibold border-[#9334eb] text-[#9334eb] hover:bg-[#9334eb]/5 disabled:opacity-60"
               >
                 Cek
@@ -97,12 +124,12 @@ export default function ScanProductPage() {
             </p>
           </section>
 
-          {f.errorMsg && (
+          {errorMsg && (
             <section className="mt-4">
               <Alert variant="destructive">
                 <AlertTitle>Gagal</AlertTitle>
                 <AlertDescription className="text-sm">
-                  {f.errorMsg}
+                  {errorMsg}
                 </AlertDescription>
               </Alert>
             </section>
@@ -110,47 +137,47 @@ export default function ScanProductPage() {
         </main>
       </div>
 
-      <Dialog open={f.offModalOpen} onOpenChange={f.setOffModalOpen}>
+      <Dialog open={offModalOpen} onOpenChange={setOffModalOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Produk tidak ditemukan</DialogTitle>
             <DialogDescription>
-              Tidak ada di Open Food Facts. Masukkan nama produk agar BuBot bisa
-              memberi kategori & tips.
+              Tidak ada di Open Food Facts. Masukkan nama produk agar asisten
+              bisa memberi kategori & tips.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <p className="text-xs text-neutral-500">
-              Barcode: <span className="font-mono">{f.pendingBarcode}</span>
+              Barcode: <span className="font-mono">{pendingBarcode}</span>
             </p>
             <Input
               autoFocus
               placeholder="Contoh: Gillette Venus razor"
-              value={f.manualName}
-              onChange={(e) => f.setManualName(e.target.value)}
+              value={manualName}
+              onChange={(e) => setManualName(e.target.value)}
             />
             <div className="flex justify-end gap-2">
               <Button
                 variant="outline"
-                onClick={() => f.setOffModalOpen(false)}
-                disabled={f.submittingName}
+                onClick={() => setOffModalOpen(false)}
+                disabled={submittingName}
               >
                 Batal
               </Button>
               <Button
-                onClick={f.submitManualName}
+                onClick={callScanWithName}
                 disabled={
-                  !f.manualName.trim() || f.submittingName || f.inflight
+                  !manualName.trim() || submittingName || inflightRef.current
                 }
                 className="bg-[#9334eb] hover:bg-[#7e2cd0] text-white"
               >
-                {f.submittingName ? (
+                {submittingName ? (
                   <span className="inline-flex items-center gap-2">
                     <Loader2 className="h-4 w-4 animate-spin" />
                     Memproses...
                   </span>
                 ) : (
-                  "Gunakan Bantuan BuBot"
+                  "Gunakan AI"
                 )}
               </Button>
             </div>
@@ -158,15 +185,16 @@ export default function ScanProductPage() {
         </DialogContent>
       </Dialog>
 
-      {f.result && (
+      {result && (
         <ResultModal
-          open={f.open}
+          open={open}
           onOpenChange={(v) => {
-            f.setOpen(v);
+            setOpen(v);
             if (!v) {
+              setTimeout(() => {}, 0);
             }
           }}
-          result={f.result}
+          result={result}
         />
       )}
     </>

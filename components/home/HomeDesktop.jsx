@@ -5,25 +5,11 @@ import HeroHeader from "@/components/home/HeroHeader";
 import QuickTile from "@/components/home/QuickTile";
 import EduCard from "@/components/home/EduCard";
 import HistoryItem from "@/components/home/HistoryItem";
+import { useRiwayat } from "@/lib/swr-riwayat";
 
 export default function HomeDesktop() {
-  const history = [
-    {
-      title: "Botol PET 600ml",
-      timestamp: "Kemarin • 14.22",
-      chipLabel: "Plastik",
-    },
-    {
-      title: "Karton Susu UHT",
-      timestamp: "Kemarin • 09.10",
-      chipLabel: "Karton",
-    },
-    {
-      title: "Gelas Kaca",
-      timestamp: "2 hari lalu • 11.05",
-      chipLabel: "Kaca",
-    },
-  ];
+  const { data, isLoading } = useRiwayat({ page: 1, limit: 3 });
+  const items = data?.items || [];
 
   return (
     <>
@@ -84,16 +70,44 @@ export default function HomeDesktop() {
               </Link>
             </div>
 
-            <ul className="space-y-2">
-              {history.map((h, i) => (
-                <HistoryItem
-                  key={i}
-                  title={h.title}
-                  timestamp={h.timestamp}
-                  chipLabel={h.chipLabel}
-                />
-              ))}
-            </ul>
+            {isLoading && !items.length ? (
+              <ul className="space-y-2">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <li
+                    key={`desk-skeleton-${i}`}
+                    className="h-16 animate-pulse rounded-xl border border-neutral-200 bg-neutral-100 dark:border-neutral-800 dark:bg-neutral-900"
+                  />
+                ))}
+              </ul>
+            ) : !items.length ? (
+              <p className="text-[13px] text-neutral-500">Belum ada riwayat.</p>
+            ) : (
+              <ul className="space-y-2">
+                {items.map((it) => {
+                  const name = it?.product?.name || `Produk ${it.barcode}`;
+                  const timeStr = it?.createdAt
+                    ? new Date(it.createdAt).toLocaleString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        day: "2-digit",
+                        month: "short",
+                      })
+                    : "-";
+                  const chip = it?.ai?.category || "";
+                  const imageUrl = it?.product?.image || "";
+
+                  return (
+                    <HistoryItem
+                      key={it.id}
+                      title={name}
+                      timestamp={timeStr}
+                      chipLabel={chip}
+                      imageUrl={imageUrl}
+                    />
+                  );
+                })}
+              </ul>
+            )}
           </section>
         </div>
       </div>

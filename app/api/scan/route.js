@@ -1,17 +1,22 @@
 import { NextResponse } from "next/server";
-import { withBarcodeLock } from "@/lib/server/scan/lock";
-import { getOffProduct, extractPackagingSignals } from "@/lib/server/scan/off";
+import { withBarcodeLock } from "@/lib/server/scan/locks";
+import { getUserIdFromRequest } from "@/lib/utils";
 import {
   fetchProductsByBarcode,
   upsertProduct,
-  fetchLatestEnrichmentByBarcode,
-  saveEnrichmentIfChanged,
   saveScanDedup,
 } from "@/lib/server/scan/mockapi";
-import { generateEnrichment } from "@/lib/server/scan/ai";
+import { getOffProduct, extractPackagingSignals } from "@/lib/server/scan/off";
+import {
+  fetchLatestEnrichmentByBarcode,
+  saveEnrichmentIfChanged,
+  normalizeTips,
+  generateEnrichmentFromAI,
+} from "@/lib/server/scan/enrichment";
 
 export async function POST(req) {
   try {
+    const userId = getUserIdFromRequest(req);
     const url = new URL(req.url);
     const force = url.searchParams.get("force") === "1";
     const requireOff = url.searchParams.get("requireOff") === "1";
@@ -23,14 +28,11 @@ export async function POST(req) {
         { status: 400 }
       );
     }
-
-    return await withBarcodeLock(barcode, async () => {
+    return await withBarcodeLock(`${userId}:${barcode}`, async () => {
       const existingList = await fetchProductsByBarcode(barcode);
       const existing = Array.isArray(existingList) && existingList[0];
-
       let off = null;
       if (!existing) off = await getOffProduct(barcode);
-
       if (requireOff && !existing && !off && !userName?.trim()) {
         return NextResponse.json(
           {
@@ -44,20 +46,17 @@ export async function POST(req) {
       }
 
       const userProvidedName = !!userName?.trim();
-      let productBase;
-      if (existing) {
-        productBase = {
-          name: existing.name || `Produk ${barcode}`,
-          barcode,
-          image: existing.image || existing.imageUrl || "",
-        };
-      } else if (off) {
-        productBase = off;
-      } else if (userProvidedName) {
-        productBase = { name: userName.trim(), barcode, image: "" };
-      } else {
-        productBase = { name: `Produk ${barcode}`, barcode, image: "" };
-      }
+      const productBase = existing
+        ? {
+            name: existing.name || `Produk ${barcode}`,
+            barcode,
+            image: existing.image || existing.imageUrl || "",
+          }
+        : off
+        ? off
+        : userProvidedName
+        ? { name: userName.trim(), barcode, image: "" }
+        : { name: `Produk ${barcode}`, barcode, image: "" };
 
       const savedProduct = await upsertProduct({
         name: productBase.name,
@@ -65,18 +64,16 @@ export async function POST(req) {
         image: productBase.image,
       });
 
-      const useCache = !force && !userProvidedName;
       let ai = null;
       let source = "existing-product";
-
-      if (useCache) {
+      if (!force && !userProvidedName) {
         const latest = await fetchLatestEnrichmentByBarcode(barcode);
         if (latest) {
           ai = {
             category: latest.category || "lainnya",
             recyclable: !!latest.recyclable,
             awareness: latest.awareness || "",
-            tips: Array.isArray(latest.tips) ? latest.tips : [],
+            tips: normalizeTips(latest.tips),
           };
           source = "cache";
         }
@@ -84,8 +81,7 @@ export async function POST(req) {
 
       if (!ai) {
         const signals = off?.raw ? extractPackagingSignals(off.raw) : {};
-        ai = await generateEnrichment({ productBase, barcode, signals });
-
+        ai = await generateEnrichmentFromAI(productBase, barcode, signals);
         await saveEnrichmentIfChanged({
           productId: savedProduct.id,
           barcode,
@@ -96,6 +92,7 @@ export async function POST(req) {
       }
 
       const scan = await saveScanDedup({
+        userId,
         productId: savedProduct.id,
         barcode,
         createdAt: new Date().toISOString(),
