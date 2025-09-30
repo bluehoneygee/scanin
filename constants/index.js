@@ -16,8 +16,8 @@ export const bottomNavLinks = [
   },
   {
     imgURL: "/icons/logo.svg",
-    route: "/chat-bot",
-    label: " BuBot",
+    route: "/waste-bank",
+    label: "PickUp",
     noInvert: true,
   },
   {
