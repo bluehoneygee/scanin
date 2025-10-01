@@ -22,7 +22,7 @@ export const bottomNavLinks = [
   },
   {
     imgURL: "/icons/user.svg",
-    route: "/profile",
+    route: "/profile/me",
     label: "Profil",
   },
 ];
