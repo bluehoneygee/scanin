@@ -1,4 +1,5 @@
-"use client";
+export const dynamic = "force-dynamic";
+("use client");
 
 import Link from "next/link";
 import { ArrowLeft, Loader2, Trash2, RotateCw } from "lucide-react";
