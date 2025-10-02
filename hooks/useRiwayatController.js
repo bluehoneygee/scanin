@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useCallback, useMemo, useState } from "react";
 import { useRiwayat } from "@/hooks/useRiwayat";
 
-export function useRiwayatController({ defaultLimit = 10, userId } = {}) {
-  const searchParams = useSearchParams();
-  const router = useRouter();
-
-  const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
+export function useRiwayatController({
+  userId,
+  defaultLimit = 10,
+  initialPage = 1,
+  pushPage,
+} = {}) {
+  const [page, setPage] = useState(Math.max(1, Number(initialPage) || 1));
   const limit = defaultLimit;
 
   const { data, error, isLoading, isValidating, mutate } = useRiwayat({
@@ -50,13 +51,17 @@ export function useRiwayatController({ defaultLimit = 10, userId } = {}) {
 
   const hasNext = !!data?.hasNext;
 
-  const goPage = (p) => {
-    const params = new URLSearchParams(searchParams);
-    params.set("page", String(p));
-    router.push(`/riwayat?${params.toString()}`);
-    if (typeof window !== "undefined")
-      window.scrollTo({ top: 0, behavior: "smooth" });
-  };
+  const goPage = useCallback(
+    (p) => {
+      const next = Math.max(1, Number(p) || 1);
+      setPage(next);
+      if (typeof pushPage === "function") pushPage(next);
+      if (typeof window !== "undefined") {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    },
+    [pushPage]
+  );
 
   async function handleDelete(id) {
     if (!id || !userId) return;
@@ -71,7 +76,7 @@ export function useRiwayatController({ defaultLimit = 10, userId } = {}) {
           const r = await fetch(
             `/api/riwayat?id=${encodeURIComponent(
               id
-            )}&userId=${encodeURIComponent(userId)}`,
+            )}&userId=${encodeURIComponent(String(userId))}`,
             { method: "DELETE" }
           );
           const del = await r.json().catch(() => ({}));
@@ -86,8 +91,8 @@ export function useRiwayatController({ defaultLimit = 10, userId } = {}) {
       );
       await mutate();
     } catch (e) {
-      alert(e.message || "Gagal menghapus.");
-      await mutate(); // rollback
+      alert(e?.message || "Gagal menghapus.");
+      await mutate();
     } finally {
       setDeletingId("");
     }
