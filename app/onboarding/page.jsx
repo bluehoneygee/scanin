@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useOnboarding } from "@/hooks/useOnboarding";
 import { SLIDES, BRAND, STORAGE_KEY } from "@/constants/onboardingSlides";
@@ -13,7 +14,7 @@ function joinWithNext(basePath, nextTarget) {
   return `${basePath}${sep}next=${encodeURIComponent(nextTarget || "/")}`;
 }
 
-export default function OnboardingPage() {
+function OnboardingInner() {
   const params = useSearchParams();
   const nextAfterOnboarding = params.get("next") || "/";
   const rawSignup = ROUTES.SIGN_UP;
@@ -28,4 +29,19 @@ export default function OnboardingPage() {
   });
 
   return <OnboardingView {...ob} />;
+}
+
+export default function OnboardingPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="px-6 py-8 animate-pulse">
+          <div className="h-6 w-40 rounded bg-neutral-200 dark:bg-neutral-800" />
+          <div className="mt-4 h-4 w-64 rounded bg-neutral-200 dark:bg-neutral-800" />
+        </div>
+      }
+    >
+      <OnboardingInner />
+    </Suspense>
+  );
 }
