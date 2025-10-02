@@ -1,9 +1,13 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { getAuthUserId, useAuthUser } from "@/lib/use-auth-user";
 import { digits, postJson } from "@/lib/utils";
 
 export function useScanController() {
+  const auth = useAuthUser();
+  const userId = getAuthUserId(auth);
+
   const [barcode, setBarcode] = useState("");
   const [loading, setLoading] = useState(false);
   const [locked, setLocked] = useState(false);
@@ -11,25 +15,25 @@ export function useScanController() {
   const [result, setResult] = useState(null);
   const [open, setOpen] = useState(false);
 
-  // modal "OFF tidak ketemu"
   const [offModalOpen, setOffModalOpen] = useState(false);
   const [pendingBarcode, setPendingBarcode] = useState("");
   const [manualName, setManualName] = useState("");
   const [submittingName, setSubmittingName] = useState(false);
 
-  // guard sinkron mencegah request ganda
   const inflightRef = useRef(false);
-  // dedupe kode yang sama (30s)
   const lastScanRef = useRef({ code: "", t: 0 });
 
   async function callScan(code, { name, requireOff = true } = {}) {
+    if (!userId) {
+      setErrorMsg("Butuh login. Silakan masuk dulu.");
+      return { ok: false };
+    }
     setLoading(true);
     setErrorMsg("");
     try {
       const url = `/api/scan${requireOff ? "?requireOff=1" : ""}`;
       const body = name ? { barcode: code, name } : { barcode: code };
-
-      const { r, data } = await postJson(url, body);
+      const { r, data } = await postJson(url, body, { "x-user-id": userId });
 
       if (
         r.status === 404 &&
@@ -82,12 +86,9 @@ export function useScanController() {
     return async (raw) => {
       const code = digits(raw);
       if (!code) return;
-
-      // blokir kalau ada request jalan / modal / loading / lock
       if (inflightRef.current || open || offModalOpen || loading || locked)
         return;
 
-      // dedupe 30s untuk kode sama
       const now = Date.now();
       if (
         lastScanRef.current.code === code &&
@@ -95,8 +96,8 @@ export function useScanController() {
       )
         return;
 
-      inflightRef.current = true; // kunci sinkron
-      setLocked(true); // pause kamera cepat
+      inflightRef.current = true;
+      setLocked(true);
       setBarcode(code);
       lastScanRef.current = { code, t: now };
 
@@ -112,6 +113,7 @@ export function useScanController() {
   const handleScanButton = async () => {
     const code = digits(barcode.trim());
     if (!code) return alert("Masukkan/scan barcode dulu ya.");
+    if (!userId) return alert("Kamu perlu login dulu ya.");
     if (inflightRef.current) return;
 
     inflightRef.current = true;
@@ -126,38 +128,28 @@ export function useScanController() {
 
   const handleCheckManual = handleScanButton;
 
-  // derived: kamera pause
   const paused =
     open || offModalOpen || loading || locked || inflightRef.current;
-
   return {
-    // state
     barcode,
     loading,
     locked,
     errorMsg,
     result,
     open,
-
     offModalOpen,
     pendingBarcode,
     manualName,
     submittingName,
-
-    // setters
     setBarcode,
     setOpen,
     setOffModalOpen,
     setManualName,
-
-    // actions
     onDetected,
     callScanWithName,
     handleScanButton,
     handleCheckManual,
-
-    // derived
     paused,
-    inflightRef, // opsional kalau mau dibaca di UI (disable tombol)
+    inflightRef,
   };
 }

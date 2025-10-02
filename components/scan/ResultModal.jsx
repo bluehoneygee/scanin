@@ -6,9 +6,8 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogClose,
 } from "@/components/ui/dialog";
-import { CheckCircle2, XCircle, X } from "lucide-react";
+import { CheckCircle2, XCircle } from "lucide-react";
 import CategoryBadge from "@/components/common/CategoryBadge";
 
 export default function ResultModal({ open, onOpenChange, result }) {

@@ -1,38 +1,30 @@
-// hooks/useRiwayat.js
 "use client";
 
-import useSWR, { mutate as globalMutate } from "swr";
+import useSWR from "swr";
 
-const fetcher = (url) =>
-  fetch(url, { cache: "no-store" }).then((r) => r.json());
+const fetcher = async (url) => {
+  const r = await fetch(url, { cache: "no-store" });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok || data?.ok === false) {
+    throw new Error(data?.message || `Gagal memuat (${r.status})`);
+  }
+  return data;
+};
 
-export function useRiwayat({
-  page = 1,
-  limit = 10,
-  userId = "demo-user-1",
-} = {}) {
-  const qs = new URLSearchParams({
-    page: String(page),
-    limit: String(limit),
-    userId,
-  }).toString();
-  const key = `/api/riwayat?${qs}`;
+export function useRiwayat({ page = 1, limit = 10, userId } = {}) {
+  const key = userId
+    ? `/api/riwayat?${new URLSearchParams({
+        page: String(page),
+        limit: String(limit),
+        userId,
+      }).toString()}`
+    : null;
 
-  const { data, error, isLoading, mutate } = useSWR(key, async () => {
-    const res = await fetcher(key);
-    if (!res?.ok) throw new Error(res?.message || "Gagal memuat riwayat.");
-    return res;
-  });
+  const { data, error, isLoading, isValidating, mutate } = useSWR(
+    key,
+    fetcher,
+    { revalidateOnFocus: false, revalidateOnReconnect: false }
+  );
 
-  return { data, error, isLoading, mutate, key };
-}
-
-// revalidate cache untuk widget riwayat di Home (halaman 1, limit n)
-export async function refreshRiwayatHome(limit = 5, userId = "demo-user-1") {
-  const qs = new URLSearchParams({
-    page: "1",
-    limit: String(limit),
-    userId,
-  }).toString();
-  await globalMutate(`/api/riwayat?${qs}`);
+  return { data, error, isLoading, isValidating, mutate, key };
 }

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getUserIdFromRequest } from "@/lib/utils";
 
 const MOCK = process.env.MOCK_API_BASE;
 
@@ -11,23 +12,32 @@ async function fetchJson(url, init) {
   return r.json();
 }
 
-async function fetchScansPaged(page, limit) {
-  const url = `${MOCK}/scans?sortBy=createdAt&order=desc&page=${page}&limit=${limit}`;
+async function fetchScansPaged(page, limit, userId) {
+  const base = `${MOCK}/scans?userId=${encodeURIComponent(
+    userId
+  )}&sortBy=createdAt&order=desc`;
+  const url = `${base}&page=${page}&limit=${limit}`;
   const r = await fetch(url, {
     cache: "no-store",
     headers: { Accept: "application/json" },
   });
+
   if (r.status === 404) {
     const all = await fetchJson(`${MOCK}/scans?sortBy=createdAt&order=desc`);
+    const filtered = (Array.isArray(all) ? all : []).filter(
+      (s) => s.userId === userId
+    );
     const start = (page - 1) * limit;
-    const slice = (Array.isArray(all) ? all : []).slice(start, start + limit);
-    const hasNext = start + limit < (Array.isArray(all) ? all.length : 0);
+    const slice = filtered.slice(start, start + limit);
+    const hasNext = start + limit < filtered.length;
     return { items: slice, hasNext };
   }
+
   if (!r.ok) {
     const t = await r.text().catch(() => "");
     throw new Error(`Gagal membaca scans (${r.status}): ${t || "(no body)"}`);
   }
+
   const arr = await r.json();
   const items = Array.isArray(arr) ? arr : [];
   const hasNext = items.length === limit;
@@ -36,9 +46,7 @@ async function fetchScansPaged(page, limit) {
 
 async function fetchProductByIdOrBarcode({ productId, barcode }) {
   try {
-    if (productId) {
-      return await fetchJson(`${MOCK}/products/${productId}`);
-    }
+    if (productId) return await fetchJson(`${MOCK}/products/${productId}`);
   } catch {}
   try {
     const r = await fetch(
@@ -88,8 +96,21 @@ export async function GET(req) {
       50,
       Math.max(1, parseInt(searchParams.get("limit") || "10", 10))
     );
+    const qpUserId = searchParams.get("userId") || "";
+    const userId = qpUserId || getUserIdFromRequest(req);
+    if (!userId) {
+      return NextResponse.json(
+        { ok: false, message: "userId tidak ditemukan" },
+        { status: 401 }
+      );
+    }
 
-    const { items: scans, hasNext } = await fetchScansPaged(page, limit);
+    const { items: scans, hasNext } = await fetchScansPaged(
+      page,
+      limit,
+      userId
+    );
+
     const merged = await Promise.all(
       scans.map(async (s) => {
         const [product, enrichment] = await Promise.all([
@@ -99,7 +120,6 @@ export async function GET(req) {
           }),
           fetchLatestEnrichment(s.barcode),
         ]);
-
         return {
           id: s.id,
           barcode: s.barcode,
@@ -142,10 +162,33 @@ export async function DELETE(req) {
     }
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
+    const qpUserId = searchParams.get("userId") || "";
+    const userId = qpUserId || getUserIdFromRequest(req);
+
     if (!id) {
       return NextResponse.json(
         { ok: false, message: "ID wajib diisi" },
         { status: 400 }
+      );
+    }
+    if (!userId) {
+      return NextResponse.json(
+        { ok: false, message: "userId tidak ditemukan" },
+        { status: 401 }
+      );
+    }
+
+    const scan = await fetchJson(`${MOCK}/scans/${id}`).catch(() => null);
+    if (!scan) {
+      return NextResponse.json(
+        { ok: false, message: "Item tidak ditemukan" },
+        { status: 404 }
+      );
+    }
+    if (scan.userId !== userId) {
+      return NextResponse.json(
+        { ok: false, message: "Tidak berhak menghapus item ini" },
+        { status: 403 }
       );
     }
 
@@ -156,7 +199,6 @@ export async function DELETE(req) {
         `Gagal menghapus scan (${r.status}): ${t || "(no body)"}`
       );
     }
-
     return NextResponse.json({ ok: true });
   } catch (e) {
     return NextResponse.json(

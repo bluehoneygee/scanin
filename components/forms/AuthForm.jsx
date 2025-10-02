@@ -118,7 +118,7 @@ const AuthForm = ({ formType, schema, defaultValues, onSubmit }) => {
 
         {formType === "SIGN_IN" ? (
           <p className="text-sm text-neutral-700 dark:text-neutral-300">
-            Don’t have an account?{" "}
+            Belum punya akun?{" "}
             <Link
               href="/sign-up"
               className="font-medium text-[#9334eb] hover:text-[#6b21a8]"
@@ -128,7 +128,7 @@ const AuthForm = ({ formType, schema, defaultValues, onSubmit }) => {
           </p>
         ) : (
           <p className="text-sm text-neutral-700 dark:text-neutral-300">
-            Already have an account?{" "}
+            Sudah punya akun?{" "}
             <Link
               href="/sign-in"
               className="font-medium text-[#9334eb] hover:text-[#6b21a8]"

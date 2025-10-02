@@ -15,14 +15,13 @@ export const bottomNavLinks = [
     label: "Scan Produk",
   },
   {
-    imgURL: "/icons/logo.svg",
+    imgURL: "/icons/pickup.svg",
     route: "/waste-bank",
     label: "PickUp",
-    noInvert: true,
   },
   {
-    imgURL: "/icons/user.svg",
-    route: "/profile/me",
-    label: "Profil",
+    imgURL: "/icons/menu.svg",
+    route: "/menu",
+    label: "Menu",
   },
 ];

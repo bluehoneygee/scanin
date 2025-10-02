@@ -154,7 +154,7 @@ export default function CameraScanner({
         autoPlay
       />
       {!supported && (
-        <div className="absolute inset-0 grid place-items-center bg-black/50 text-white text-sm">
+        <div className="absolute inset-0 grid place-items-center bg-black/50 text-sm text-white">
           Kamera tidak didukung. Gunakan input manual.
         </div>
       )}

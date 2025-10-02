@@ -91,15 +91,17 @@ export default function WasteBankPickPage() {
   return (
     <div className="min-h-dvh w-full bg-neutral-50 text-neutral-900 dark:bg-neutral-950 dark:text-neutral-50">
       <header className="sticky top-0 z-40">
-        <div className="relative left-1/2 -ml-[50vw] w-[100vw] -mr-[50vw] border-b border-neutral-200 bg-white/90 pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/80">
+        <div className="lg:hidden relative left-1/2 -ml-[50vw] w-[100vw] -mr-[50vw] border-b border-neutral-200 bg-white/90 pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/80">
           <div className="mx-auto max-w-3xl px-4 py-3 flex items-center gap-3">
             <Link
               href="/"
-              className="inline-flex items-center gap-1 text-[13px] font-medium"
+              className="inline-flex items-center gap-1 text-[13px] font-medium "
             >
               <ArrowLeft size={16} /> Kembali
             </Link>
-            <h1 className="mx-auto text-sm font-semibold">Pilih Bank Sampah</h1>
+            <h1 className="mx-auto text-sm font-semibold font-poppins">
+              Pilih Bank Sampah
+            </h1>
             <span className="w-12" />
           </div>
         </div>
@@ -110,7 +112,7 @@ export default function WasteBankPickPage() {
           <div className="mb-4 rounded-xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-[12px] text-neutral-500 inline-flex items-center gap-1">
+                <p className="text-[10px] text-neutral-500 inline-flex items-center gap-1">
                   <History className="h-3.5 w-3.5" /> Terakhir digunakan
                 </p>
                 <p className="mt-1 font-semibold">{lastBank.nama}</p>
@@ -119,21 +121,35 @@ export default function WasteBankPickPage() {
                   {lastBank.kelurahan}
                 </p>
                 {lastBank.alamat ? (
-                  <p className="mt-1 inline-flex items-center gap-1 text-[12px] text-neutral-500">
+                  <p className="mt-1 inline-flex items-center gap-1 text-[12px] text-neutral-500 font-poppins">
                     <MapPin className="h-3.5 w-3.5" /> {lastBank.alamat}
                   </p>
                 ) : null}
               </div>
               <div className="flex items-center gap-2">
-                <Button
-                  className="rounded-[18px] bg-gradient-to-r from-[#9334eb] to-[#6b21a8] text-white"
-                  onClick={useLastBank}
+                <a
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    useLastBank();
+                  }}
+                  className="text-[12px] font-medium text-[#9334eb] hover:underline"
                 >
                   Gunakan
-                </Button>
-                <Button variant="outline" onClick={clearLastBank}>
+                </a>
+
+                <span className="text-neutral-300">•</span>
+
+                <a
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    clearLastBank();
+                  }}
+                  className="text-[12px] font-medium text-neutral-500 hover:text-neutral-700 hover:underline"
+                >
                   Hapus
-                </Button>
+                </a>
               </div>
             </div>
           </div>
@@ -163,7 +179,7 @@ export default function WasteBankPickPage() {
                       localStorage.setItem("wb-last-wilayah", v);
                   } catch {}
                 }}
-                className="h-10 w-full appearance-none rounded-xl border border-neutral-200 bg-white pl-3 pr-9 text-sm shadow-sm outline-none dark:border-neutral-800 dark:bg-neutral-900"
+                className=" font-grotesk h-10 w-full appearance-none rounded-xl border border-neutral-200 bg-white pl-3 pr-9 text-sm shadow-sm outline-none dark:border-neutral-800 dark:bg-neutral-900"
               >
                 <option>Semua Wilayah</option>
                 {wilayahOptions.map((w) => (
@@ -211,18 +227,18 @@ export default function WasteBankPickPage() {
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="font-semibold">{b.nama}</p>
-                  <p className="mt-0.5 text-[12px] text-neutral-500">
+                  <p className="font-semibold font-poppins">{b.nama}</p>
+                  <p className="mt-0.5 text-[12px] text-neutral-500 font-grotesk">
                     {b.wilayah} • {b.kecamatan} • {b.kelurahan}
                   </p>
                   {b.alamat ? (
-                    <p className="mt-1 inline-flex items-center gap-1 text-[12px] text-neutral-500">
-                      <MapPin className="h-3.5 w-3.5" /> {b.alamat}
+                    <p className="font-grotesk mt-1 inline-flex items-center gap-1 text-[12px] text-neutral-500">
+                      <MapPin className="h-3.5 w-3.5 " /> {b.alamat}
                     </p>
                   ) : null}
                 </div>
                 <Button
-                  className="rounded-[18px] bg-gradient-to-r from-[#9334eb] to-[#6b21a8] text-white"
+                  className=" rounded-[18px] bg-gradient-to-r from-[#9334eb] to-[#6b21a8] text-white"
                   onClick={() => chooseBank(b)}
                 >
                   Pilih
@@ -232,7 +248,7 @@ export default function WasteBankPickPage() {
           ))}
         </ul>
         {(canPrev || canNext) && (
-          <div className="mt-6 flex items-center justify-between">
+          <div className="mt-6 flex items-center justify-between ">
             <Button
               variant="outline"
               onClick={() => setPage((p) => Math.max(1, p - 1))}

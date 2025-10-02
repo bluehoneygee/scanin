@@ -13,7 +13,7 @@ export async function POST(req) {
       );
     }
 
-    const base = String(BASE || "").replace(/\/+$/, ""); // buang trailing slash
+    const base = String(BASE || "").replace(/\/+$/, "");
     const url = `${base}/users?email=${encodeURIComponent(email)}`;
 
     const r = await fetch(url, { cache: "no-store" });

@@ -26,16 +26,15 @@ export function OnboardingView({
         <div className="relative w-full overflow-hidden lg:min-h-dvh">
           <div className="relative h-[clamp(260px,40vh,420px)] md:h-[clamp(320px,42vh,520px)] lg:h-full">
             <img
-              key={slide.key}
-              src={slide.src}
-              alt={slide.title}
+              key={slide?.key}
+              src={slide?.src}
+              alt={slide?.title || "Onboarding"}
               className="absolute inset-0 h-full w-full select-none object-cover"
               draggable={false}
             />
             <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.10)_0%,rgba(0,0,0,0.05)_50%,rgba(255,255,255,0)_100%)] lg:bg-transparent" />
           </div>
         </div>
-
         <div className="min-h-0 bg-white lg:bg-white lg:mx-0 flex">
           <section
             className="relative -mt-6 flex min-h-0 flex-1 flex-col justify-between
@@ -45,23 +44,17 @@ export function OnboardingView({
                        lg:mt-0 lg:rounded-none lg:ring-0 lg:shadow-none lg:px-10 lg:py-12 lg:min-h-dvh"
           >
             <div className="font-poppins">
-              <div className="mb-18 flex items-center gap-2 sm:mb-24">
-                <span className=" bg-gradient-to-r from-[#9334eb] to-[#6b21a8] bg-clip-text text-[36px] sm:text-[68px] font-extrabold leading-none text-transparent">
+              <div className="mb-18 mt-6 flex items-center gap-2 sm:mb-24">
+                <span className="bg-gradient-to-r from-[#9334eb] to-[#6b21a8] bg-clip-text text-[36px] sm:text-[68px] font-extrabold leading-none text-transparent">
                   {BRAND}
                 </span>
               </div>
 
-              <h1
-                className="whitespace-pre-line text-center font-extrabold leading-snug
-                           text-[28px] md:text-[40px] lg:text-[40px]"
-              >
-                {slide.title}
+              <h1 className="whitespace-pre-line text-center font-extrabold leading-snug text-[28px] md:text-[40px] lg:text-[40px]">
+                {slide?.title}
               </h1>
-              <p
-                className="font-grotesk mt-4 text-center leading-relaxed text-neutral-600
-                           text-[16px] sm:text-[20px] md:text-[26px]"
-              >
-                {slide.desc}
+              <p className="font-grotesk mt-4 text-center leading-relaxed text-neutral-600 text-[16px] sm:text-[20px] md:text-[26px]">
+                {slide?.desc}
               </p>
             </div>
 
@@ -87,7 +80,6 @@ export function OnboardingView({
               >
                 Lewati
               </button>
-
               <button
                 onClick={next}
                 aria-label={isLast ? "Selesai" : "Lanjut"}

@@ -1,32 +1,68 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { readAuthUserLocal, getAuthUserId } from "@/lib/use-auth-user";
 
-export function useOnboarding({ SLIDES, STORAGE_KEY, nextRoute, BRAND }) {
+export function useOnboarding({
+  SLIDES = [],
+  STORAGE_KEY = "onboarding-complete",
+  nextRoute = "/sign-up",
+  BRAND,
+}) {
   const router = useRouter();
+  const params = useSearchParams();
+
   const [i, setI] = useState(0);
-  const isLast = i === SLIDES.length - 1;
-  const slide = SLIDES[i];
+  const [hydrated, setHydrated] = useState(false);
+
+  const lastIndex = Math.max(0, SLIDES.length - 1);
+  const isLast = SLIDES.length ? i === lastIndex : true;
+  const slide = SLIDES[Math.min(i, lastIndex)] || {};
+
+  useEffect(() => {
+    const uid = getAuthUserId(readAuthUserLocal());
+    try {
+      const v1 = localStorage.getItem(STORAGE_KEY);
+      const v2 = uid ? localStorage.getItem(`${STORAGE_KEY}:${uid}`) : null;
+      const done = v1 === "true" || v1 === "1" || v2 === "true" || v2 === "1";
+      if (done) {
+        router.replace(params.get("next") || "/");
+        return;
+      }
+    } finally {
+      setHydrated(true);
+    }
+  }, [router, params, STORAGE_KEY]);
 
   const finish = useCallback(() => {
+    const uid = getAuthUserId(readAuthUserLocal());
     try {
-      localStorage.setItem(STORAGE_KEY, "true");
+      localStorage.setItem(STORAGE_KEY, "1");
+      if (uid) localStorage.setItem(`${STORAGE_KEY}:${uid}`, "1");
     } catch {}
     router.replace(nextRoute);
   }, [router, STORAGE_KEY, nextRoute]);
 
-  const next = useCallback(
-    () => (isLast ? finish() : setI((p) => Math.min(p + 1, SLIDES.length - 1))),
-    [isLast, finish, SLIDES.length]
-  );
+  const next = useCallback(() => {
+    if (!SLIDES.length || isLast) return finish();
+    setI((p) => Math.min(p + 1, lastIndex));
+  }, [SLIDES.length, isLast, finish, lastIndex]);
+
   const prev = useCallback(() => setI((p) => Math.max(0, p - 1)), []);
 
   const startX = useRef(0);
-  const onTouchStart = (e) => (startX.current = e.touches[0].clientX);
+  const startY = useRef(0);
+  const onTouchStart = (e) => {
+    if (!e.touches?.length) return;
+    startX.current = e.touches[0].clientX;
+    startY.current = e.touches[0].clientY;
+  };
   const onTouchEnd = (e) => {
+    if (!e.changedTouches?.length) return;
     const dx = e.changedTouches[0].clientX - startX.current;
-    if (Math.abs(dx) < 40) return;
+    const dy = e.changedTouches[0].clientY - startY.current;
+    if (Math.abs(dx) < Math.abs(dy) || Math.abs(dx) < 40) return;
     dx < 0 ? next() : prev();
   };
 
@@ -51,5 +87,6 @@ export function useOnboarding({ SLIDES, STORAGE_KEY, nextRoute, BRAND }) {
     finish,
     onTouchStart,
     onTouchEnd,
+    hydrated,
   };
 }

@@ -17,10 +17,16 @@ import {
 export async function POST(req) {
   try {
     const userId = getUserIdFromRequest(req);
+    if (!userId) {
+      return NextResponse.json(
+        { ok: false, message: "Butuh login. userId tidak ditemukan." },
+        { status: 401 }
+      );
+    }
+
     const url = new URL(req.url);
     const force = url.searchParams.get("force") === "1";
     const requireOff = url.searchParams.get("requireOff") === "1";
-
     const { barcode, name: userName } = await req.json();
     if (!barcode || typeof barcode !== "string") {
       return NextResponse.json(
@@ -106,11 +112,7 @@ export async function POST(req) {
           name: savedProduct.name,
           barcode: savedProduct.barcode,
           image:
-            savedProduct.image ||
-            savedProduct.imageUrl ||
-            off?.image ||
-            "" ||
-            "",
+            savedProduct.image || savedProduct.imageUrl || off?.image || "",
         },
         ai,
         scan,

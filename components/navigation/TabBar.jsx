@@ -75,7 +75,7 @@ export default function TabBar() {
                   maskSize: "contain",
                 }}
               />
-              <span className="font-medium">{item.label}</span>
+              <span className="font-medium font-poppins">{item.label}</span>
             </Link>
           );
         })}

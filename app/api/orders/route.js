@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 
-const BASE = process.env.MOCK_API_BASE;
-
+const BASE = process.env.MOCK_API_BASE?.replace(/\/+$/, "");
 const RES = "pickupOrders";
 
 function itemsArrayToObject(items) {
@@ -28,6 +27,19 @@ function itemsObjectToArray(items) {
     qty: Number(v?.qty ?? 0),
   }));
 }
+function getUserId(req, bodyUserId) {
+  try {
+    const url = new URL(req.url);
+    const fromQuery = url.searchParams.get("userId") || "";
+    const fromHeader = req.headers.get("x-user-id") || "";
+    const cookie = req.headers.get("cookie") || "";
+    const m = cookie?.match?.(/(?:^|;\s*)auth_user_id=([^;]+)/i);
+    const fromCookie = m ? decodeURIComponent(m[1]) : "";
+    return fromQuery || fromHeader || bodyUserId || fromCookie || "";
+  } catch {
+    return bodyUserId || "";
+  }
+}
 
 export async function GET(req) {
   if (!BASE) {
@@ -38,43 +50,113 @@ export async function GET(req) {
   }
 
   const url = new URL(req.url);
-  const userId = url.searchParams.get("userId") || "";
-  const page = url.searchParams.get("page") || "1";
-  const limit = url.searchParams.get("limit") || "20";
+  const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10));
+  const limit = Math.max(
+    1,
+    parseInt(url.searchParams.get("limit") || "20", 10)
+  );
   const sortBy = url.searchParams.get("sortBy") || "createdAt";
   const order = url.searchParams.get("order") || "desc";
+  const userId = getUserId(req, "");
 
-  const qs = new URLSearchParams({
-    ...(userId ? { userId } : {}),
-    page,
-    limit,
+  if (!userId) {
+    return NextResponse.json(
+      { ok: false, message: "userId tidak ditemukan (login dulu)" },
+      { status: 401 }
+    );
+  }
+
+  const upstreamBase = `${BASE}/${RES}`;
+  const mapItems = (arr) =>
+    (Array.isArray(arr) ? arr : []).map((o) => ({
+      ...o,
+      items: itemsObjectToArray(o.items),
+    }));
+
+  const qs1 = new URLSearchParams({
+    userId,
+    page: String(page),
+    limit: String(limit),
     sortBy,
     order,
   }).toString();
 
-  const r = await fetch(`${BASE}/${RES}?${qs}`, { cache: "no-store" });
-  let raw;
-  try {
-    raw = await r.json();
-  } catch {
-    raw = null;
+  let r = await fetch(`${upstreamBase}?${qs1}`, {
+    cache: "no-store",
+    headers: { Accept: "application/json" },
+  });
+
+  if (r.ok) {
+    const raw = await r.json().catch(() => []);
+    return NextResponse.json({ ok: true, items: mapItems(raw) });
   }
 
-  if (!r.ok) {
+  if (r.status === 404) {
+    const rAll = await fetch(
+      `${upstreamBase}?userId=${encodeURIComponent(userId)}`,
+      { cache: "no-store", headers: { Accept: "application/json" } }
+    );
+    if (rAll.ok) {
+      const all = (await rAll.json().catch(() => [])) || [];
+      all.sort((a, b) => {
+        const ta = new Date(a.createdAt || 0).getTime();
+        const tb = new Date(b.createdAt || 0).getTime();
+        return order.toLowerCase() === "asc" ? ta - tb : tb - ta;
+      });
+      const start = (page - 1) * limit;
+      const slice = all.slice(start, start + limit);
+      return NextResponse.json({ ok: true, items: mapItems(slice) });
+    }
+
+    const qs2 = new URLSearchParams({
+      userId,
+      _page: String(page),
+      _limit: String(limit),
+      _sort: sortBy,
+      _order: order,
+    }).toString();
+
+    const rJS = await fetch(`${upstreamBase}?${qs2}`, {
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+    });
+
+    if (rJS.ok) {
+      const raw = await rJS.json().catch(() => []);
+      return NextResponse.json({ ok: true, items: mapItems(raw) });
+    }
+
+    if (rJS.status === 404) {
+      return NextResponse.json({ ok: true, items: [] });
+    }
+
+    const detail = await rJS.json().catch(() => null);
     return NextResponse.json(
-      { ok: false, message: "Upstream GET gagal", detail: raw },
-      { status: r.status }
+      { ok: false, message: "Upstream GET gagal", detail },
+      { status: rJS.status || 502 }
     );
   }
 
-  const items = Array.isArray(raw)
-    ? raw.map((o) => ({ ...o, items: itemsObjectToArray(o.items) }))
-    : [];
-
-  return NextResponse.json({ ok: true, items });
+  let detail;
+  try {
+    detail = await r.json();
+  } catch {
+    detail = null;
+  }
+  return NextResponse.json(
+    { ok: false, message: "Upstream GET gagal", detail },
+    { status: r.status || 502 }
+  );
 }
 
 export async function POST(req) {
+  if (!BASE) {
+    return NextResponse.json(
+      { ok: false, message: "MOCK_API_BASE belum diset di .env.local" },
+      { status: 500 }
+    );
+  }
+
   let body;
   try {
     body = await req.json();
@@ -85,36 +167,39 @@ export async function POST(req) {
     );
   }
 
-  if (!BASE) {
+  const userId = getUserId(req, body?.userId || "");
+  if (!userId) {
     return NextResponse.json(
-      { ok: false, message: "MOCK_API_BASE belum diset di .env.local" },
-      { status: 500 }
+      { ok: false, message: "userId tidak ditemukan (login dulu)" },
+      { status: 401 }
     );
   }
 
   const payload = {
     ...body,
-    items: itemsArrayToObject(body.items),
+    userId, // enforce
+    items: itemsArrayToObject(body.items), // normalize ke map
     createdAt: body.createdAt || new Date().toISOString(),
   };
 
-  const r = await fetch(`${BASE}/${RES}`, {
+  const upstream = await fetch(`${BASE}/${RES}`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", Accept: "application/json" },
     body: JSON.stringify(payload),
     cache: "no-store",
   });
 
   let raw;
   try {
-    raw = await r.json();
+    raw = await upstream.json();
   } catch {
     raw = null;
   }
-  if (!r.ok) {
+
+  if (!upstream.ok) {
     return NextResponse.json(
       { ok: false, message: "Upstream POST gagal", detail: raw },
-      { status: r.status }
+      { status: upstream.status }
     );
   }
 

@@ -1,26 +1,24 @@
-// hooks/useRiwayatController.js
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { useRiwayat, refreshRiwayatHome } from "@/hooks/useRiwayat"; // <-- pindah juga (lihat langkah 2)
+import { useRiwayat } from "@/hooks/useRiwayat";
 
-export function useRiwayatController({
-  defaultLimit = 10,
-  userId = "demo-user-1",
-} = {}) {
+export function useRiwayatController({ defaultLimit = 10, userId } = {}) {
   const searchParams = useSearchParams();
   const router = useRouter();
 
   const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
   const limit = defaultLimit;
 
-  const { data, error, isLoading, mutate } = useRiwayat({
+  const { data, error, isLoading, isValidating, mutate } = useRiwayat({
     page,
     limit,
     userId,
   });
+
   const [deletingId, setDeletingId] = useState("");
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const items = useMemo(() => {
     const raw = data?.items || [];
@@ -45,6 +43,7 @@ export function useRiwayatController({
         chip,
         tips,
         timeStr,
+        _raw: it,
       };
     });
   }, [data]);
@@ -60,7 +59,7 @@ export function useRiwayatController({
   };
 
   async function handleDelete(id) {
-    if (!id) return;
+    if (!id || !userId) return;
     if (!confirm("Hapus item riwayat ini?")) return;
 
     setDeletingId(id);
@@ -69,9 +68,12 @@ export function useRiwayatController({
     try {
       await mutate(
         async () => {
-          const r = await fetch(`/api/riwayat?id=${encodeURIComponent(id)}`, {
-            method: "DELETE",
-          });
+          const r = await fetch(
+            `/api/riwayat?id=${encodeURIComponent(
+              id
+            )}&userId=${encodeURIComponent(userId)}`,
+            { method: "DELETE" }
+          );
           const del = await r.json().catch(() => ({}));
           if (!r.ok || !del?.ok)
             throw new Error(del?.message || "Gagal menghapus");
@@ -82,18 +84,23 @@ export function useRiwayatController({
         },
         { revalidate: false }
       );
-      await refreshRiwayatHome(5, userId); // sync mini-widget di Home
+      await mutate();
     } catch (e) {
       alert(e.message || "Gagal menghapus.");
-      await mutate(); // fallback revalidate penuh
+      await mutate(); // rollback
     } finally {
       setDeletingId("");
     }
   }
 
   async function refresh() {
-    await mutate(); // revalidate halaman ini
-    await refreshRiwayatHome(5, userId); // revalidate cache Home
+    if (!userId || isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      await mutate();
+    } finally {
+      setIsRefreshing(false);
+    }
   }
 
   return {
@@ -103,6 +110,8 @@ export function useRiwayatController({
     hasNext,
     error,
     isLoading,
+    isValidating,
+    isRefreshing,
     deletingId,
     goPage,
     handleDelete,

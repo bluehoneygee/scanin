@@ -5,7 +5,7 @@ const ROUTES = {
   PROFILE: (id) => `/profile/${id}`,
   SCAN_PRODUCT: "/scan-product",
   RIWAYAT: "/riwayat",
-  CHATBOT: "/chat-bot",
+  WASTE_BANK: "/waste-bank",
 };
 
 export default ROUTES;

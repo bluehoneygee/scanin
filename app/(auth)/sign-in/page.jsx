@@ -1,19 +1,21 @@
 "use client";
+
 import AuthForm from "@/components/forms/AuthForm";
 import { SignInSchema } from "@/lib/validations";
-import React from "react";
+import { setAuthUserLocal } from "@/lib/use-auth-user";
 import { useSearchParams } from "next/navigation";
 
-const SignInPage = () => {
+export default function SignInPage() {
   const search = useSearchParams();
   const initialEmail = search.get("email") || "";
   const justSignedUp = search.get("justSignedUp") === "1";
+  const next = search.get("next") || "/";
 
   return (
     <>
       {justSignedUp ? (
         <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-100">
-          Akun berhasil dibuat. Silakan masuk dengan email & password kamu.
+          Akun berhasil dibuat. Silakan masuk dengan email &amp; password kamu.
         </div>
       ) : null}
 
@@ -37,11 +39,9 @@ const SignInPage = () => {
               };
             }
 
-            try {
-              localStorage.setItem("auth-user", JSON.stringify(data.user));
-            } catch {}
+            setAuthUserLocal(data.user);
 
-            return { success: true, data: data.user, redirect: "/" };
+            return { success: true, data: data.user, redirect: next };
           } catch (e) {
             return { success: false, message: e.message || "Gagal sign-in." };
           }
@@ -49,6 +49,4 @@ const SignInPage = () => {
       />
     </>
   );
-};
-
-export default SignInPage;
+}
