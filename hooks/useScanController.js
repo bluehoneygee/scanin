@@ -24,17 +24,14 @@ export function useScanController() {
   const lastScanRef = useRef({ code: "", t: 0 });
 
   async function callScan(code, { name, requireOff = true } = {}) {
-    if (!userId) {
-      setErrorMsg("Butuh login. Silakan masuk dulu.");
-      return { ok: false };
-    }
+    if (!userId) return { ok: false };
+
     setLoading(true);
     setErrorMsg("");
     try {
       const url = `/api/scan${requireOff ? "?requireOff=1" : ""}`;
       const body = name ? { barcode: code, name } : { barcode: code };
       const { r, data } = await postJson(url, body, { "x-user-id": userId });
-
       if (
         r.status === 404 &&
         (data?.code === "NEED_NAME" || data?.code === "OFF_NOT_FOUND")
@@ -45,9 +42,9 @@ export function useScanController() {
         return { ok: false, needName: true };
       }
 
-      if (!r.ok || !data?.ok)
+      if (!r.ok || !data?.ok) {
         throw new Error(data?.message || "Gagal memproses scan.");
-
+      }
       setResult(data);
       if (!open) setOpen(true);
       return { ok: true, needName: false };
@@ -84,6 +81,8 @@ export function useScanController() {
 
   const onDetected = useMemo(() => {
     return async (raw) => {
+      if (!userId) return;
+
       const code = digits(raw);
       if (!code) return;
       if (inflightRef.current || open || offModalOpen || loading || locked)
@@ -108,7 +107,7 @@ export function useScanController() {
         setLocked(false);
       }
     };
-  }, [open, offModalOpen, loading, locked]);
+  }, [open, offModalOpen, loading, locked, userId]);
 
   const handleScanButton = async () => {
     const code = digits(barcode.trim());
@@ -129,7 +128,8 @@ export function useScanController() {
   const handleCheckManual = handleScanButton;
 
   const paused =
-    open || offModalOpen || loading || locked || inflightRef.current;
+    !userId || open || offModalOpen || loading || locked || inflightRef.current;
+
   return {
     barcode,
     loading,
