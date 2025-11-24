@@ -1,36 +1,90 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+<div align="center">
 
-## Getting Started
+  <h3 align="center">ScanIn</h3>
 
-First, run the development server:
+   <div align="center">
+     A Next.js 15 (App Router) app to scan product barcodes, classify packaging with AI, and book waste pick-ups to nearby waste banks. Users can sign up/sign in, track scan history, schedule pickups, and browse Jakarta waste-bank options.
+    </div>
+</div>
+
+## 📋 <a name="table">Table of Contents</a>
+
+1. 🤖 [Introduction](#introduction)
+2. ⚙️ [Tech Stack](#tech-stack)
+3. 🔋 [Features](#features)
+4. 🤸 [Quick Start](#quick-start)
+
+## <a name="introduction">🤖 Introduction</a>
+
+ScanIn helps households sort waste responsibly. Scan barcodes with the camera or manually, let AI classify the packaging, get recycling tips, and build pickup requests to waste banks around Jakarta. The app uses Next.js App Router (SSR/ISR/PPR), cached AI enrichment, and MockAPI as the data backend for users, scans, enrichments, and pickup orders.
+
+Waste-bank listings are fetched live from the Jakarta open-data endpoint (`https://ws.jakarta.go.id/.../data-lokasi-bank-sampah`) and filtered client-side for active entries.
+
+## <a name="tech-stack">⚙️ Tech Stack</a>
+
+- Next.js 15 (App Router) + React 19
+- Tailwind CSS v4 (utility-first styling)
+- ShadCN-inspired UI primitives (Radix UI + tailwind-merge + clsx)
+- SWR for client data fetching
+- AI SDK + OpenAI (packaging classification & tips)
+- MockAPI for user, scan, enrichment, and order data
+- Zod, React Hook Form, Lucide Icons
+
+## <a name="features">🔋 Features</a>
+
+👉 **Authentication**: Email/password sign-up & sign-in backed by MockAPI, with onboarding guard for protected screens.  
+👉 **Home feed**: Responsive dashboard with shortcuts to scan, history, pickups, and achievements.  
+👉 **Barcode scanning**: Camera-based scanner plus manual input; automatically deduplicates scans.  
+👉 **AI enrichment**: OpenAI summarizes packaging category, recyclability, awareness notes, and action tips (cached to reduce calls).  
+👉 **Scan history**: Paginated history of scanned items per user.  
+👉 **Waste-bank directory**: Filter by wilayah/kecamatan/kelurahan; remembers last used bank.  
+👉 **Pickup builder**: Choose a bank, select waste items and quantities, auto-calculate total, pick date/time slot, add contact/address, and submit order.  
+👉 **Orders list**: View submitted pickup requests and statuses.  
+👉 **Profile & menu**: Profile summary, quick links, and logout.  
+👉 **Responsive UI**: Optimized for mobile-first with desktop variants where needed.
+
+## <a name="quick-start">🤸 Quick Start</a>
+
+Follow these steps to run the project locally.
+
+**Prerequisites**
+
+- Node.js 18.18+ (Node 20+ recommended)
+- npm
+
+**Cloning the Repository**
+
+```bash
+git clone https://github.com/bluehoneygee/scanin.git
+cd scanin
+```
+
+**Installation**
+
+```bash
+npm install
+```
+
+**Set Up Environment Variables**
+
+Create `.env.local` in the project root:
+
+```env
+# MockAPI base URL (e.g., https://<id>.mockapi.io/api/v1)
+MOCK_API_BASE=
+
+# OpenAI (required for AI enrichment)
+OPENAI_API_KEY=
+```
+
+**Running the Project**
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Visit http://localhost:3000 to see the app. If you use MockAPI, make sure the `products`, `scans`, `enrichments`, `users`, and `orders` collections exist or are auto-created on first write.
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+**Waste-bank data source**
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+No extra env var is needed. The waste-bank directory calls the public Jakarta dataset at `https://ws.jakarta.go.id/gateway/DataPortalSatuDataJakarta/1.0/satudata?kategori=dataset&tipe=detail&url=data-lokasi-bank-sampah`. Ensure your environment can reach that URL (or proxy it if your network restricts outbound requests).
